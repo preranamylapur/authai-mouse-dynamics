@@ -1,0 +1,40 @@
+{
+  "genuine_user": "prerana",
+  "window_events": 100,
+  "operating_threshold": 0.5,
+  "seen_impostors": [
+    "imp01"
+  ],
+  "unseen_impostors": [],
+  "balabit_used": false,
+  "evaluations": {
+    "all_impostors": {
+      "eer": 0.49789915966386555,
+      "eer_threshold": 0.5721493860170334,
+      "auc": 0.5523809523809524,
+      "n_genuine": 119,
+      "n_impostor": 120,
+      "threshold": 0.5,
+      "FAR": 0.6083333333333333,
+      "FRR": 0.4117647058823529,
+      "accuracy": 0.4895397489539749,
+      "balanced_accuracy": 0.4899509803921569,
+      "smoothed_5win_eer": 0.4761994002998501,
+      "smoothed_5win_auc": 0.5858320839580209
+    },
+    "seen_impostors": {
+      "eer": 0.49789915966386555,
+      "eer_threshold": 0.5721493860170334,
+      "auc": 0.5523809523809524,
+      "n_genuine": 119,
+      "n_impostor": 120,
+      "threshold": 0.5,
+      "FAR": 0.6083333333333333,
+      "FRR": 0.4117647058823529,
+      "accuracy": 0.4895397489539749,
+      "balanced_accuracy": 0.4899509803921569,
+      "smoothed_5win_eer": 0.4761994002998501,
+      "smoothed_5win_auc": 0.5858320839580209
+    }
+  }
+}

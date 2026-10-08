@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AuthAI - Enrollment</title>
+</head>
+<body style="height: 2000px;">
+    <h2>Enrollment Mode</h2>
+    <p>Move your mouse naturally around this page for at least 2-3 minutes. Browse, scroll, click around like normal.</p>
+    <p id="status">Collected: 0 events</p>
+    <button id="saveBtn">Save My Session</button>
+
+    <script>
+        const events = [];
+
+        document.addEventListener("mousemove", (e) => {
+            events.push({
+                "record timestamp": performance.now() / 1000,
+                "client timestamp": performance.now() / 1000,
+                "button": "NoButton",
+                "state": "Move",
+                "x": e.clientX,
+                "y": e.clientY
+            });
+            document.getElementById("status").innerText = `Collected: ${events.length} events`;
+        });
+
+        document.addEventListener("mousedown", (e) => {
+            events.push({
+                "record timestamp": performance.now() / 1000,
+                "client timestamp": performance.now() / 1000,
+                "button": "Left",
+                "state": "Pressed",
+                "x": e.clientX,
+                "y": e.clientY
+            });
+        });
+
+        document.getElementById("saveBtn").addEventListener("click", () => {
+            let csv = "record timestamp,client timestamp,button,state,x,y\n";
+            events.forEach(ev => {
+                csv += `${ev["record timestamp"]},${ev["client timestamp"]},${ev.button},${ev.state},${ev.x},${ev.y}\n`;
+            });
+
+            const blob = new Blob([csv], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "my_session.csv";
+            a.click();
+
+            document.getElementById("status").innerText = `Saved ${events.length} events to my_session.csv — check your Downloads folder`;
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "user_id": "prerana",
+  "role": "genuine",
+  "session": 2,
+  "device": "mouse",
+  "mouse_model": null,
+  "dpi": null,
+  "recorded_at": "2026-10-07T21:13:52.569Z",
+  "duration_s": 192.047,
+  "n_events": 11658,
+  "state_counts": {
+    "Move": 8950,
+    "Pressed": 96,
+    "Drag": 2499,
+    "Released": 96,
+    "Down": 12,
+    "Up": 5
+  },
+  "tasks": [
+    {
+      "name": "Task A: click the circles",
+      "start": 0.001,
+      "end": 68.19
+    },
+    {
+      "name": "Task B: drag and drop",
+      "start": 69.229,
+      "end": 98.25
+    },
+    {
+      "name": "Task C: read and find",
+      "start": 99.878,
+      "end": 192.048
+    }
+  ],
+  "screen": {
+    "width": 1440,
+    "height": 900,
+    "avail_w": 1440,
+    "avail_h": 805
+  },
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_pixel_ratio": 2,
+  "zoom_changed_during_session": false,
+  "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15",
+  "platform": "MacIntel",
+  "coordinate_space": "clientX/clientY, CSS pixels, viewport origin top-left",
+  "time_source": "performance.now(), seconds since session start",
+  "columns": [
+    "record timestamp",
+    "client timestamp",
+    "button",
+    "state",
+    "x",
+    "y"
+  ]
+}

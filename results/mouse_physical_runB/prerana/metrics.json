@@ -1,0 +1,65 @@
+{
+  "genuine_user": "prerana",
+  "window_events": 100,
+  "operating_threshold": 0.6328342831632305,
+  "seen_impostors": [
+    "balabit_user23",
+    "balabit_user12",
+    "balabit_user9",
+    "balabit_user16",
+    "balabit_user15",
+    "balabit_user7",
+    "balabit_user21",
+    "balabit_user35",
+    "balabit_user20",
+    "balabit_user29"
+  ],
+  "unseen_impostors": [
+    "imp01"
+  ],
+  "balabit_used": true,
+  "evaluations": {
+    "all_impostors": {
+      "eer": 0.06429613522729469,
+      "eer_threshold": 0.8177311363100837,
+      "auc": 0.9680829120193206,
+      "n_genuine": 119,
+      "n_impostor": 3911,
+      "threshold": 0.6328342831632305,
+      "FAR": 0.06238813602659166,
+      "FRR": 0.0,
+      "accuracy": 0.939454094292804,
+      "balanced_accuracy": 0.9688059319867042,
+      "smoothed_5win_eer": 0.05903949397292034,
+      "smoothed_5win_auc": 0.9601503674774055
+    },
+    "seen_impostors": {
+      "eer": 0.0,
+      "eer_threshold": 0.6751701299848637,
+      "auc": 1.0,
+      "n_genuine": 119,
+      "n_impostor": 3665,
+      "threshold": 0.6328342831632305,
+      "FAR": 0.00027285129604365623,
+      "FRR": 0.0,
+      "accuracy": 0.9997357293868921,
+      "balanced_accuracy": 0.9998635743519781,
+      "smoothed_5win_eer": 0.0,
+      "smoothed_5win_auc": 1.0
+    },
+    "unseen_impostors": {
+      "eer": 0.48556739769078366,
+      "eer_threshold": 0.9913490492741517,
+      "auc": 0.4925701988112319,
+      "n_genuine": 119,
+      "n_impostor": 246,
+      "threshold": 0.6328342831632305,
+      "FAR": 0.9878048780487805,
+      "FRR": 0.0,
+      "accuracy": 0.33424657534246577,
+      "balanced_accuracy": 0.5060975609756098,
+      "smoothed_5win_eer": 0.636719035440263,
+      "smoothed_5win_auc": 0.35319693094629157
+    }
+  }
+}

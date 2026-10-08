@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AuthAI - Mouse Dynamics Live Demo</title>
+</head>
+<body style="height: 2000px;">
+    <h2>AuthAI Live Authentication Demo</h2>
+
+    <label for="modelSelect">Authenticate against: </label>
+    <select id="modelSelect">
+        <option value="prerana">Prerana (live enrolled user)</option>
+        <option value="user7">User7 (Balabit dataset)</option>
+    </select>
+
+    <p>Move your mouse around this page.</p>
+    <p id="status">Waiting for enough events...</p>
+
+    <script>
+        const events = [];
+        const WINDOW_SIZE = 100;
+        const API_URL = "http://127.0.0.1:5000/authenticate";
+
+        document.addEventListener("mousemove", (e) => {
+            events.push({
+                "x": e.clientX,
+                "y": e.clientY,
+                "client timestamp": performance.now() / 1000,
+                "state": "Move"
+            });
+
+            document.getElementById("status").innerText =
+                `Collected ${events.length}/${WINDOW_SIZE} events`;
+
+            if (events.length >= WINDOW_SIZE) {
+                const selectedModel = document.getElementById("modelSelect").value;
+                sendWindow(events.slice(0, WINDOW_SIZE), selectedModel);
+                events.length = 0;
+            }
+        });
+
+        async function sendWindow(windowEvents, modelName) {
+            try {
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ events: windowEvents, model: modelName })
+                });
+                const result = await response.json();
+                document.getElementById("status").innerText =
+                    `Model: ${result.active_model} | Decision: ${result.decision} | Confidence: ${result.mouse_confidence} | Trust: ${result.trust_score} (${result.trust_status})`;
+            } catch (err) {
+                document.getElementById("status").innerText = "Error contacting API: " + err;
+            }
+        }
+    </script>
+</body>
+</html>

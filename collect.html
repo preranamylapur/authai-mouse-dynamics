@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<!--
+  AuthAI — Mouse Dynamics: Data Collection Tool  (NEW FILE)
+  ---------------------------------------------------------
+  Records raw mouse events during 3 fixed tasks and saves:
+    1. <user>_<device>_s<NN>_<date>.csv   -> Balabit-compatible 6 columns:
+         record timestamp, client timestamp, button, state, x, y
+    2. <user>_<device>_s<NN>_<date>.json  -> session metadata (who, device,
+         screen, task time ranges). Kept separate so the CSV stays identical
+         in format to Balabit / your existing preprocessing.
+  Event capture uses the same browser events as the live demo (mousemove,
+  mousedown, mouseup, wheel) so training data and live data match.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AuthAI Mouse Collector</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#667085; --accent:#2f6fed; --ok:#14804a; --warn:#b54708; --line:#e3e6eb; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; user-select:none; -webkit-user-select:none; }
+  .screen { display:none; position:fixed; inset:0; }
+  .screen.active { display:block; }
+  .center { max-width:560px; margin:6vh auto; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:28px 32px; }
+  h1 { font-size:22px; margin:0 0 4px; } h2 { font-size:18px; margin:0 0 8px; }
+  .muted { color:var(--muted); font-size:13px; }
+  label { display:block; margin:14px 0 4px; font-weight:600; font-size:13px; }
+  input,select { width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px; font:inherit; user-select:text; }
+  button.primary { margin-top:22px; width:100%; padding:12px; border:0; border-radius:8px; background:var(--accent); color:#fff; font:600 15px inherit; cursor:pointer; }
+  button.primary:disabled { opacity:.45; cursor:not-allowed; }
+  .row { display:flex; gap:12px; } .row > div { flex:1; }
+  #hud { position:fixed; top:0; left:0; right:0; height:40px; display:none; align-items:center; gap:20px; padding:0 16px;
+    background:#fff; border-bottom:1px solid var(--line); font-size:13px; z-index:50; }
+  #hud b { font-variant-numeric:tabular-nums; }
+  #hud .task { font-weight:700; color:var(--accent); }
+  .arena { position:fixed; top:40px; left:0; right:0; bottom:0; }
+  /* Task A */
+  .target { position:absolute; border-radius:50%; background:var(--accent); cursor:pointer; box-shadow:0 0 0 4px rgba(47,111,237,.18); }
+  /* Task B */
+  .piece { position:absolute; width:56px; height:56px; border-radius:10px; cursor:grab; box-shadow:0 2px 6px rgba(0,0,0,.18); }
+  .bin { position:absolute; width:150px; height:150px; border:3px dashed; border-radius:14px; display:flex; align-items:flex-end; justify-content:center; padding-bottom:6px; font-weight:700; font-size:13px; }
+  /* Task C */
+  #readWrap { position:fixed; top:40px; left:0; right:0; bottom:0; overflow-y:auto; }
+  #reading { max-width:720px; margin:0 auto; padding:24px 24px 60vh; font-size:17px; line-height:1.9; }
+  #reading p { margin:0 0 30px; }
+  .hl { background:#ffe08a; padding:1px 4px; border-radius:4px; cursor:pointer; font-weight:600; }
+  .hl.done { background:#c8f0d4; color:var(--ok); cursor:default; }
+  .msg { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); text-align:center; color:var(--muted); pointer-events:none; }
+  .warn { color:var(--warn); font-weight:600; }
+  ul.check { padding-left:18px; margin:8px 0; } ul.check li { margin:3px 0; }
+</style>
+</head>
+<body>
+
+<!-- ============ SCREEN 1: SETUP ============ -->
+<div class="screen active" id="s-setup"><div class="center">
+  <h1>AuthAI · Mouse Data Collection</h1>
+  <div class="muted">One session takes about 8–10 minutes: three short tasks. Recording starts when you press Start.</div>
+
+  <label>User ID (lowercase, no spaces; same every session)</label>
+  <input id="uid" placeholder="e.g. prerana  or  imp01">
+  <div class="row">
+    <div><label>Role</label>
+      <select id="role"><option value="genuine">genuine (account owner)</option><option value="impostor">impostor (someone else)</option></select></div>
+    <div><label>Session number</label><input id="sess" type="number" min="1" value="1"></div>
+  </div>
+  <div class="row">
+    <div><label>Device</label>
+      <select id="device"><option value="mouse">physical mouse</option><option value="trackpad">trackpad</option></select></div>
+    <div><label>Mouse DPI setting (if known)</label><input id="dpi" placeholder="e.g. 1600"></div>
+  </div>
+  <label>Mouse model</label><input id="model" placeholder="e.g. Portronics Toad 23">
+
+  <div style="margin-top:18px" class="muted">Before starting, check:</div>
+  <ul class="check muted">
+    <li>Browser zoom is 100% (Ctrl/Cmd + 0)</li>
+    <li>Same laptop, same browser, laptop screen only, same mouse surface</li>
+    <li>Mouse DPI button and OS pointer speed have not been changed</li>
+  </ul>
+  <div id="zoomWarn" class="warn" style="display:none"></div>
+  <button class="primary" id="startBtn" disabled>Start session (goes full screen)</button>
+</div></div>
+
+<!-- ============ HUD (shown while recording) ============ -->
+<div id="hud">
+  <span class="task" id="hudTask">Task</span>
+  <span id="hudProg"></span>
+  <span>Events: <b id="hudEv">0</b></span>
+  <span>Time: <b id="hudTime">0:00</b></span>
+</div>
+
+<!-- ============ TASK A: click targets ============ -->
+<div class="screen" id="s-a"><div class="arena" id="arenaA"></div></div>
+
+<!-- ============ TASK B: drag and drop ============ -->
+<div class="screen" id="s-b"><div class="arena" id="arenaB"></div></div>
+
+<!-- ============ TASK C: read & find ============ -->
+<div class="screen" id="s-c"><div id="readWrap"><div id="reading"></div></div></div>
+
+<!-- ============ INTERMISSION ============ -->
+<div class="screen" id="s-inter"><div class="center">
+  <h2 id="interTitle"></h2><div id="interBody"></div>
+  <button class="primary" id="interBtn">Continue</button>
+</div></div>
+
+<!-- ============ DONE ============ -->
+<div class="screen" id="s-done"><div class="center">
+  <h2>Session complete</h2>
+  <div id="summary"></div>
+  <button class="primary" id="saveBtn">Download data files (.csv + .json)</button>
+  <div class="muted" style="margin-top:12px">Two files will download. Move both into <code>data/raw/mouse/&lt;user_id&gt;/</code>. Then reload this page for the next session.</div>
+</div></div>
+
+<script>
+/* =====================================================================
+   PART 1 — RECORDER
+   Every row = [record_ts, client_ts, button, state, x, y]  (Balabit order)
+   - Time: seconds since session start (performance.now -> monotonic, ms precision)
+   - x, y: clientX / clientY in CSS pixels (viewport coords). Same as live demo.
+   - Balabit vocab: Move / Drag / Pressed / Released (button Left|Right|NoButton),
+     scroll -> button "Scroll", state "Up"/"Down".
+   ===================================================================== */
+const rec = { on:false, t0:0, rows:[], tasks:[], cur:null, buttonsDown:0 };
+const BTN = {0:'Left', 1:'Middle', 2:'Right'};
+function now(){ return (performance.now() - rec.t0) / 1000; }
+function push(button, state, x, y){
+  if(!rec.on) return;
+  const t = +now().toFixed(4);
+  rec.rows.push([t, t, button, state, Math.round(x), Math.round(y)]);
+}
+document.addEventListener('mousemove', e => {
+  // While a button is held the movement is a drag (Balabit: NoButton,Drag)
+  // e.buttons = buttons physically held RIGHT NOW (reported by the browser).
+  // More reliable than counting down/up events, which can get out of sync.
+  push('NoButton', e.buttons ? 'Drag' : 'Move', e.clientX, e.clientY);
+}, {capture:true, passive:true});
+document.addEventListener('mousedown', e => {
+  rec.buttonsDown++; push(BTN[e.button]||'Other', 'Pressed', e.clientX, e.clientY);
+}, {capture:true});
+document.addEventListener('mouseup', e => {
+  rec.buttonsDown = Math.max(0, rec.buttonsDown-1); push(BTN[e.button]||'Other', 'Released', e.clientX, e.clientY);
+}, {capture:true});
+document.addEventListener('wheel', e => {
+  push('Scroll', e.deltaY < 0 ? 'Up' : 'Down', e.clientX, e.clientY);
+}, {capture:true, passive:true});
+document.addEventListener('contextmenu', e => { if(rec.on) e.preventDefault(); });
+window.addEventListener('beforeunload', e => { if(rec.rows.length && !saved){ e.preventDefault(); e.returnValue=''; } });
+
+function startTask(name){ rec.cur = {name, start:+now().toFixed(3)}; document.getElementById('hudTask').textContent = name; }
+function endTask(){ if(rec.cur){ rec.cur.end = +now().toFixed(3); rec.tasks.push(rec.cur); rec.cur=null; } }
+
+// HUD refresh
+setInterval(() => {
+  if(!rec.on) return;
+  document.getElementById('hudEv').textContent = rec.rows.length;
+  const s = Math.floor(now()); document.getElementById('hudTime').textContent = Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+}, 250);
+
+/* =====================================================================
+   PART 2 — SCREEN FLOW
+   ===================================================================== */
+function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+const $ = id => document.getElementById(id);
+
+// Setup validation + zoom check (devicePixelRatio changes with browser zoom)
+const baseDPR = window.devicePixelRatio;
+function validate(){
+  const ok = /^[a-z0-9_]+$/.test($('uid').value.trim()) && +$('sess').value >= 1;
+  $('startBtn').disabled = !ok;
+}
+['uid','sess'].forEach(i => $(i).addEventListener('input', validate));
+$('startBtn').onclick = async () => {
+  try { await document.documentElement.requestFullscreen(); } catch(e) {}
+  setTimeout(() => {
+    rec.t0 = performance.now(); rec.on = true; $('hud').style.display = 'flex';
+    taskA();
+  }, 400);
+};
+
+function intermission(title, body, next){
+  endTask(); show('s-inter'); $('hud').style.display='none';
+  $('interTitle').textContent = title; $('interBody').innerHTML = body;
+  $('interBtn').onclick = () => { $('hud').style.display='flex'; next(); };
+}
+
+/* ---------- TASK A: 50 click targets at random positions and sizes ----------
+   Why: point-and-click is the core mouse action; varying distance and size
+   (Fitts' law) makes the user produce many different movement trajectories. */
+const A_N = 50;
+function taskA(){
+  show('s-a'); startTask('Task A: click the circles');
+  const arena = $('arenaA'); arena.innerHTML = '<div class="msg">Click each blue circle as it appears. Move naturally.</div>';
+  let n = 0; let last = null;
+  function next(){
+    if(n >= A_N){ intermission('Task A done', 'Next: drag each coloured square into the box of the same colour.', taskB); return; }
+    n++; $('hudProg').textContent = n+' / '+A_N;
+    const W = arena.clientWidth, H = arena.clientHeight;
+    const d = 22 + Math.random()*42;
+    let x, y, tries = 0;
+    do { x = 20 + Math.random()*(W-d-40); y = 20 + Math.random()*(H-d-40); tries++; }
+    while(last && Math.hypot(x-last.x, y-last.y) < 180 && tries < 30); // force real movements
+    last = {x,y};
+    const t = document.createElement('div'); t.className='target';
+    Object.assign(t.style, {left:x+'px', top:y+'px', width:d+'px', height:d+'px'});
+    t.onclick = () => { t.remove(); const m=arena.querySelector('.msg'); if(m) m.remove(); next(); };
+    arena.appendChild(t);
+  }
+  next();
+}
+
+/* ---------- TASK B: drag 12 squares into 3 colour bins ----------
+   Why: produces Drag events (button held while moving), a different motor
+   pattern from free movement. Custom drag (not HTML5 drag-and-drop) is used
+   because HTML5 drag suppresses mousemove events, which would lose data. */
+function taskB(){
+  show('s-b'); startTask('Task B: drag and drop');
+  const arena = $('arenaB'); arena.innerHTML='';
+  const W = arena.clientWidth, H = arena.clientHeight;
+  const cols = [['#e5484d','RED'],['#2f6fed','BLUE'],['#14a05a','GREEN']];
+  const bins = cols.map((c,i) => {
+    const b = document.createElement('div'); b.className='bin';
+    Object.assign(b.style,{left:(W-190)+'px', top:(40 + i*(H-80)/3 + ((H-80)/3-150)/2)+'px', borderColor:c[0], color:c[0]});
+    b.textContent=c[1]; b.dataset.c=c[0]; arena.appendChild(b); return b;
+  });
+  let left = 12; $('hudProg').textContent = '0 / 12';
+  for(let i=0;i<12;i++){
+    const p = document.createElement('div'); p.className='piece'; const c = cols[i%3][0];
+    p.style.background=c; p.dataset.c=c;
+    p.style.left = (30 + Math.random()*(W*0.45)) + 'px'; p.style.top = (30 + Math.random()*(H-120)) + 'px';
+    arena.appendChild(p);
+    p.addEventListener('mousedown', e => {
+      e.preventDefault(); const ox = e.clientX - p.offsetLeft, oy = e.clientY - p.offsetTop; p.style.zIndex=10;
+      const mv = ev => { p.style.left=(ev.clientX-ox)+'px'; p.style.top=(ev.clientY-oy)+'px'; };
+      const up = ev => {
+        document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); p.style.zIndex='';
+        const r = p.getBoundingClientRect(), cx=r.left+r.width/2, cy=r.top+r.height/2;
+        const hit = bins.find(b => { const q=b.getBoundingClientRect(); return cx>q.left&&cx<q.right&&cy>q.top&&cy<q.bottom; });
+        if(hit && hit.dataset.c===p.dataset.c){ p.remove(); left--; $('hudProg').textContent=(12-left)+' / 12';
+          if(left===0) intermission('Task B done','Next: scroll through the text and click every <span class="hl">highlighted word</span>. Read normally as you go.', taskC); }
+      };
+      document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+    });
+  }
+}
+
+/* ---------- TASK C: scroll through text and click 12 highlighted words ----------
+   Why: closest to natural browsing — scrolling, pauses while reading,
+   short precise movements to small targets. */
+const TEXT = [
+ "Behavioural biometrics study the way people interact with devices rather than what they know or carry. A password can be shared and a token can be stolen, but the small habits in how a person moves a pointer are difficult to copy on purpose.",
+ "When someone reaches for a button, the cursor rarely travels in a perfect line. It speeds up, slows down near the goal, and often makes a tiny correction before the click. The shape of that path differs from person to person.",
+ "Researchers describe these paths with measures such as speed, acceleration, curvature and the length of pauses. No single measure identifies a person, but together they form a pattern that is surprisingly stable over time.",
+ "Continuous verification means the system keeps checking quietly in the background instead of trusting a single login. If the pattern suddenly changes, the session can be challenged before any damage is done.",
+ "Of course, people are not machines. Tiredness, a new desk, or a different mouse can change how someone moves. A good system must tolerate normal variation while still noticing when a stranger takes over.",
+ "This is why data is collected on several different days. The model then learns what stays the same about a person, not what happened to be true during one particular afternoon.",
+ "Monsoon evenings in the city bring sudden showers, crowded buses and the smell of wet earth. Many students spend these hours in the library, where the only sound is the gentle click of keyboards.",
+ "Tea stalls near the campus gate stay open late, serving small glasses of sweet tea to anyone finishing a long assignment. Conversations there move between cricket scores, exam dates and plans for the weekend.",
+ "A well designed experiment keeps everything constant except the thing being studied. Here, the screen, the browser, the mouse and the tasks stay the same, so the only real difference between sessions is the person.",
+ "Thank you for taking part. When you reach the end, the session will finish automatically once every highlighted word has been clicked."
+];
+const HL = ['habits','correction','curvature','background','tolerate','different','library','assignment','weekend','constant','person','automatically'];
+function taskC(){
+  show('s-c'); startTask('Task C: read and find');
+  const box = $('reading'); box.innerHTML='';
+  const done = new Set(); $('hudProg').textContent = '0 / '+HL.length;
+  const remaining = new Set(HL);
+  TEXT.forEach(par => {
+    const p = document.createElement('p');
+    p.innerHTML = par.split(' ').map(w => {
+      const clean = w.replace(/[^a-zA-Z]/g,'').toLowerCase();
+      if(remaining.has(clean)){ remaining.delete(clean); return '<span class="hl" data-w="'+clean+'">'+w+'</span>'; }
+      return w;
+    }).join(' ');
+    box.appendChild(p);
+  });
+  $('readWrap').scrollTop = 0;
+  box.querySelectorAll('.hl').forEach(s => s.onclick = () => {
+    if(done.has(s.dataset.w)) return; done.add(s.dataset.w); s.classList.add('done');
+    $('hudProg').textContent = done.size+' / '+HL.length;
+    if(done.size === HL.length) finish();
+  });
+}
+
+/* =====================================================================
+   PART 3 — FINISH, QUALITY CHECK, SAVE
+   ===================================================================== */
+let saved = false, meta = null;
+function finish(){
+  endTask(); rec.on = false; $('hud').style.display='none';
+  try { if(document.fullscreenElement) document.exitFullscreen(); } catch(e) {}
+  const dur = rec.rows.length ? rec.rows[rec.rows.length-1][1] : 0;
+  const counts = {}; rec.rows.forEach(r => counts[r[3]] = (counts[r[3]]||0)+1);
+  const zoomChanged = Math.abs(window.devicePixelRatio - baseDPR) > 0.01;
+  meta = {
+    schema_version: 2,
+    user_id: $('uid').value.trim(), role: $('role').value, session: +$('sess').value,
+    device: $('device').value, mouse_model: $('model').value.trim() || null, dpi: $('dpi').value.trim() || null,
+    recorded_at: new Date().toISOString(),
+    duration_s: dur, n_events: rec.rows.length, state_counts: counts,
+    tasks: rec.tasks,
+    screen: { width: screen.width, height: screen.height, avail_w: screen.availWidth, avail_h: screen.availHeight },
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    device_pixel_ratio: window.devicePixelRatio, zoom_changed_during_session: zoomChanged,
+    user_agent: navigator.userAgent, platform: navigator.platform,
+    coordinate_space: 'clientX/clientY, CSS pixels, viewport origin top-left',
+    time_source: 'performance.now(), seconds since session start',
+    columns: ['record timestamp','client timestamp','button','state','x','y']
+  };
+  const mins = (dur/60).toFixed(1);
+  $('summary').innerHTML =
+    '<p>User <b>'+meta.user_id+'</b> · '+meta.role+' · session '+meta.session+' · '+meta.device+'</p>'+
+    '<p>Duration <b>'+mins+' min</b> · <b>'+meta.n_events+'</b> events<br>'+
+    Object.entries(counts).map(([k,v])=>k+': '+v).join(' · ')+'</p>'+
+    (dur < 300 ? '<p class="warn">Session was under 5 minutes. Fine to save, but aim for 8–10 minutes.</p>' : '')+
+    (zoomChanged ? '<p class="warn">Browser zoom changed during the session. Note this; the session may need to be redone.</p>' : '');
+  show('s-done');
+}
+
+function download(name, text, type){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], {type})); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+$('saveBtn').onclick = () => {
+  const date = meta.recorded_at.slice(0,10);
+  const base = meta.user_id+'_'+meta.device+'_s'+String(meta.session).padStart(2,'0')+'_'+date;
+  const csv = meta.columns.join(',')+'\n'+rec.rows.map(r=>r.join(',')).join('\n')+'\n';
+  download(base+'.csv', csv, 'text/csv');
+  setTimeout(() => download(base+'.json', JSON.stringify(meta,null,2), 'application/json'), 300);
+  saved = true; $('saveBtn').textContent = 'Downloaded ✓  (click again to re-download)';
+};
+</script>
+</body>
+</html>
